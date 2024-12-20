@@ -1,7 +1,7 @@
 use miniserve::{http::StatusCode, Content, Request, Response};
 use serde::{Deserialize, Serialize};
 
-fn index(_req: Request) -> Response {
+async fn index(_req: Request) -> Response {
     let content = include_str!("../index.html").to_string();
     Ok(Content::Html(content))
 }
@@ -11,23 +11,28 @@ struct Messages {
     messages: Vec<String>,
 }
 
-fn chat(req: Request) -> Response {
-    let Request::Post(body) = req else {
-        return Err(StatusCode::METHOD_NOT_ALLOWED);
-    };
+async fn chat(req: Request) -> Response {
+    match req {
+        Request::Get => Ok(Content::Json(
+            serde_json::to_string(&Messages { messages: vec![] }).unwrap(),
+        )),
+        Request::Post(body) => {
+            let Ok(mut messages) = serde_json::from_str::<Messages>(&body) else {
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            };
 
-    let Ok(mut messages) = serde_json::from_str::<Messages>(&body) else {
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
-    };
+            messages.messages.push("Bazinga!".into());
 
-    messages.messages.push("Bazinga!".into());
-
-    Ok(Content::Json(serde_json::to_string(&messages).unwrap()))
+            Ok(Content::Json(serde_json::to_string(&messages).unwrap()))
+        }
+    }
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     miniserve::Server::new()
         .route("/", index)
         .route("/chat", chat)
         .run()
+        .await
 }
